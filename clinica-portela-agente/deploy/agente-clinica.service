@@ -1,0 +1,12 @@
+[Unit]
+Description=Agente IA Clinica Portela - Bot Telegram
+After=network.target
+
+[Service]
+WorkingDirectory=/home/ubuntu/clinica-portela-agente
+ExecStart=/home/ubuntu/clinica-portela-agente/venv/bin/python src/telegram_bot.py
+Restart=always
+User=ubuntu
+
+[Install]
+WantedBy=multi-user.target
