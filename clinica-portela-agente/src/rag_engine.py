@@ -21,29 +21,23 @@ Pergunta: {question}
 
 Resposta:"""
 
-
 def load_agent(index_dir="index"):
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
+        model="models/gemini-embedding-001",
         google_api_key=os.getenv("GEMINI_API_KEY")
     )
-
     vectorstore = FAISS.load_local(
-        index_dir, embeddings,
-        allow_dangerous_deserialization=True
+        index_dir, embeddings, allow_dangerous_deserialization=True
     )
-
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
         google_api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0.2
     )
-
     prompt = PromptTemplate(
         template=PROMPT_TEMPLATE,
         input_variables=["context", "question"]
     )
-
     qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
         retriever=vectorstore.as_retriever(search_kwargs={"k": 4}),
@@ -51,7 +45,6 @@ def load_agent(index_dir="index"):
         return_source_documents=False
     )
     return qa_chain
-
 
 def answer_question(qa_chain, question: str) -> str:
     try:
