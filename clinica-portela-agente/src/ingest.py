@@ -1,6 +1,6 @@
 import os
 from langchain_community.document_loaders import PyPDFDirectoryLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
@@ -23,8 +23,8 @@ def build_index(docs_dir="documentos", index_dir="index"):
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     chunks = splitter.split_documents(documents)
 
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
+   embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/text-embedding-004",
         google_api_key=os.getenv("GEMINI_API_KEY")
     )
 
@@ -34,4 +34,4 @@ def build_index(docs_dir="documentos", index_dir="index"):
 
 
 if __name__ == "__main__":
-    build_index()
+    build_index()   
