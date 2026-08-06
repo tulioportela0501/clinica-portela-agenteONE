@@ -1,55 +1,85 @@
 import os
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain_community.vectorstores import FAISS
-from langchain_classic.chains import RetrievalQA
-from langchain_core.prompts import PromptTemplate
+
 from dotenv import load_dotenv
+
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains.retrieval import create_retrieval_chain
 
 load_dotenv()
 
-PROMPT_TEMPLATE = """Você é o assistente virtual da Clínica Portela.
-Responda à pergunta do paciente usando APENAS as informações do contexto abaixo.
-Se a resposta não estiver no contexto, diga educadamente que não tem essa
-informação e sugira que o paciente entre em contato com a recepção.
-Nunca invente horários, preços ou convênios que não estejam no contexto.
-Responda sempre em português, de forma clara e cordial.
+PROMPT = """
+Você é o assistente virtual da Clínica Portela.
 
-Contexto:
+Responda SOMENTE usando o contexto abaixo.
+
+Se a resposta não estiver no contexto, responda exatamente:
+
+"Não encontrei essa informação em nossa base de conhecimento. Entre em contato com a recepção da Clínica Portela."
+
+Nunca invente informações.
+
+<context>
 {context}
+</context>
 
-Pergunta: {question}
+Pergunta:
+{input}
+"""
 
-Resposta:"""
 
 def load_agent(index_dir="index"):
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/gemini-embedding-001",
-        google_api_key=os.getenv("GEMINI_API_KEY")
+
+    embeddings = OpenAIEmbeddings(
+        model="text-embedding-3-small",
+        api_key=os.getenv("OPENAI_API_KEY")
     )
+
     vectorstore = FAISS.load_local(
-        index_dir, embeddings, allow_dangerous_deserialization=True
+        index_dir,
+        embeddings,
+        allow_dangerous_deserialization=True
     )
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite",
-        google_api_key=os.getenv("GEMINI_API_KEY"),
+
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+
+    llm = ChatOpenAI(
+        model="gpt-4.1-mini",
+        api_key=os.getenv("OPENAI_API_KEY"),
         temperature=0.2
     )
-    prompt = PromptTemplate(
-        template=PROMPT_TEMPLATE,
-        input_variables=["context", "question"]
-    )
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        retriever=vectorstore.as_retriever(search_kwargs={"k": 4}),
-        chain_type_kwargs={"prompt": prompt},
-        return_source_documents=False
-    )
-    return qa_chain
 
-def answer_question(qa_chain, question: str) -> str:
+    prompt = ChatPromptTemplate.from_template(PROMPT)
+
+    document_chain = create_stuff_documents_chain(
+        llm,
+        prompt
+    )
+
+    chain = create_retrieval_chain(
+        retriever,
+        document_chain
+    )
+
+    return chain
+
+
+def answer_question(chain, question):
+
     try:
-        result = qa_chain.invoke({"query": question})
-        return result["result"]
+
+        response = chain.invoke(
+            {
+                "input": question
+            }
+        )
+
+        return response["answer"]
+
     except Exception as e:
-        print(f"Erro ao processar pergunta: {e}")
-        return "Desculpe, tive um problema para processar sua pergunta. Tente novamente em instantes."
+        import traceback
+        traceback.print_exc()
+        return str(e)
