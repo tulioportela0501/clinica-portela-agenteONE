@@ -30,7 +30,7 @@ def load_agent(index_dir="index"):
         index_dir, embeddings, allow_dangerous_deserialization=True
     )
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-lite",
         google_api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0.2
     )
