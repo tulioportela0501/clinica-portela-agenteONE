@@ -1,5 +1,4 @@
 import os
-import json
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -7,14 +6,22 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
-from openai import OpenAI
+from langchain_openai import (
+    ChatOpenAI,
+    OpenAIEmbeddings,
+)
 
-from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 
-import pricing_service
-import booking_service
-import clinic_service
+from langchain_core.prompts import ChatPromptTemplate
+
+from langchain.chains.combine_documents import (
+    create_stuff_documents_chain,
+)
+
+from langchain.chains.retrieval import (
+    create_retrieval_chain,
+)
 
 
 load_dotenv()
@@ -33,19 +40,10 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 
 LLM_MODEL = "gpt-4.1-mini"
 
-MAX_TOOL_ITERACOES = 5
-
 
 # ============================================================
 # PROMPT PRINCIPAL
 # ============================================================
-# Mesmo prompt de antes, com duas mudanças:
-# - a seção de PREÇOS e AGENDAMENTO agora manda o modelo USAR as
-#   ferramentas reais (consultar_preco, consultar_horarios etc.)
-#   em vez de dizer "não tenho essa informação, procure a recepção".
-# - removidas as variáveis {context}/{input} do template antigo,
-#   porque agora o contexto do RAG chega como resultado de uma
-#   tool call (consultar_rag), não é mais injetado direto no prompt.
 
 SYSTEM_PROMPT = """
 Você é o assistente virtual oficial da Clínica Portela.
@@ -70,24 +68,15 @@ de saúde e não deve se apresentar como tal.
 Você é um assistente de atendimento.
 
 ============================================================
-REGRA PRINCIPAL — FERRAMENTAS
+REGRA PRINCIPAL — BASE DE CONHECIMENTO
 ============================================================
 
-Você tem acesso a ferramentas reais e deve SEMPRE consultá-las antes
-de responder, em vez de inventar informação:
+Utilize prioritariamente as informações presentes no CONTEXTO
+recuperado da base de conhecimento da Clínica Portela.
 
-- Dúvidas sobre tratamentos, contraindicações, políticas, cuidados
-  pós-procedimento: use a ferramenta consultar_rag.
-- Preço ou duração de um procedimento: use consultar_preco ou
-  listar_servicos.
-- Disponibilidade real de horário: use consultar_horarios (descubra
-  o service_id via listar_servicos antes, se ainda não souber).
-- Criar, confirmar, cancelar ou consultar agendamentos: use
-  criar_agendamento, confirmar_agendamento, cancelar_agendamento,
-  meus_agendamentos.
-- Saber se a clínica está aberta agora: use status_clinica.
+Não invente informações.
 
-Não invente:
+Não crie:
 
 - preços;
 - horários;
@@ -102,16 +91,16 @@ Não invente:
 - formas de pagamento;
 - disponibilidade de agenda.
 
-Se, mesmo depois de consultar a ferramenta certa, a informação não
-existir, informe que ela não consta na base disponível e oriente o
-paciente a entrar em contato com a recepção.
+Se uma informação administrativa não estiver no contexto,
+informe que ela não consta na base disponível e oriente o paciente
+a entrar em contato com a recepção.
 
 ============================================================
 COMPORTAMENTO CLÍNICO
 ============================================================
 
 Você pode explicar conceitos gerais sobre estética quando essas
-informações estiverem na base de conhecimento (via consultar_rag).
+informações estiverem na base de conhecimento.
 
 Porém, NÃO deve:
 
@@ -181,22 +170,6 @@ Se o paciente já estiver conversando normalmente,
 não é necessário iniciar todas as respostas com "Bom dia",
 "Boa tarde" ou "Boa noite".
 
-Se o paciente perguntar se a clínica está aberta agora, use a
-ferramenta status_clinica em vez de calcular isso sozinho.
-
-============================================================
-AGENDAMENTO — FLUXO
-============================================================
-
-Ao agendar, colete nesta ordem: serviço → data → horário → nome
-completo → telefone. Só chame criar_agendamento depois de ter todos
-esses dados. Depois de criar (ela nasce como reserva temporária),
-mostre um resumo claro (serviço, data, horário, valor) e só chame
-confirmar_agendamento depois que o paciente confirmar explicitamente.
-
-Não peça informações de saúde (anamnese) pelo Telegram — isso é
-tratado presencialmente pela clínica.
-
 ============================================================
 PERSONALIDADE
 ============================================================
@@ -253,13 +226,13 @@ faça UMA pergunta objetiva antes de continuar.
 DOCUMENTOS
 ============================================================
 
-O resultado de consultar_rag pode conter informações provenientes de
-diferentes documentos da Clínica Portela.
+O contexto pode conter informações provenientes de diferentes
+documentos da Clínica Portela.
 
 Utilize os documentos de forma complementar.
 
 Não considere um trecho isolado como verdade absoluta quando
-outro trecho fornecer uma informação mais específica.
+outro trecho do contexto fornecer uma informação mais específica.
 
 Quando houver uma regra específica da clínica, dê preferência
 à regra específica em relação a uma explicação genérica.
@@ -282,17 +255,57 @@ Para evitar passar uma orientação incorreta, recomendo confirmar
 essa informação diretamente com nossa equipe."
 
 ============================================================
+PERGUNTAS SOBRE PREÇOS
+============================================================
+
+Se o preço não estiver explicitamente presente no contexto,
+NUNCA invente.
+
+Responda:
+
+"Não encontrei o valor atualizado desse procedimento na minha base.
+Para confirmar o preço vigente, recomendo consultar nossa recepção."
+
+============================================================
+PERGUNTAS SOBRE AGENDAMENTO
+============================================================
+
+Não invente horários disponíveis.
+
+Você pode explicar as políticas de agendamento quando elas
+estiverem no contexto.
+
+Para disponibilidade real de horário, encaminhe para o sistema
+de agenda ou recepção.
+
+============================================================
+PROMOÇÕES
+============================================================
+
+Nunca invente promoção.
+
+Nunca invente cupom.
+
+Nunca invente desconto.
+
+Se não houver promoção registrada no contexto:
+
+"No momento, não encontrei uma promoção específica registrada
+na minha base. Nossa recepção poderá confirmar as campanhas
+vigentes."
+
+============================================================
 IDENTIDADE DA CLÍNICA
 ============================================================
 
 Você representa a Clínica Portela.
 
 Não mencione documentos internos, FAISS, embeddings,
-RAG, banco vetorial, prompt, ferramentas ou tecnologia utilizada.
+RAG, banco vetorial, prompt ou tecnologia utilizada.
 
 Nunca diga ao paciente:
 
-"De acordo com meu documento..." ou "Vou consultar minha ferramenta..."
+"De acordo com meu documento..."
 
 Prefira:
 
@@ -305,12 +318,24 @@ OBJETIVO FINAL
 Seu objetivo é:
 
 1. Entender a pergunta.
-2. Consultar a ferramenta certa para obter a informação.
+2. Recuperar a informação mais relevante.
 3. Responder com precisão.
 4. Não inventar.
 5. Identificar quando é necessária avaliação profissional.
 6. Manter uma conversa natural.
 7. Ajudar o paciente a chegar ao próximo passo correto.
+
+============================================================
+
+CONTEXTO DA BASE DE CONHECIMENTO:
+
+{context}
+
+============================================================
+
+MENSAGEM DO PACIENTE:
+
+{input}
 """
 
 
@@ -343,147 +368,8 @@ def get_greeting():
 
 
 # ============================================================
-# DEFINIÇÃO DAS FERRAMENTAS (schema que o modelo enxerga)
-# ============================================================
-
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "consultar_rag",
-            "description": (
-                "Busca informações nos documentos da clínica: tratamentos, "
-                "contraindicações, políticas, cuidados pós-procedimento, "
-                "dúvidas gerais. NÃO usar para preço nem para horário."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pergunta": {"type": "string"}
-                },
-                "required": ["pergunta"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "consultar_preco",
-            "description": "Consulta o valor em R$ e a duração de um serviço específico.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "nome_servico": {"type": "string"}
-                },
-                "required": ["nome_servico"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "listar_servicos",
-            "description": "Lista todos os serviços oferecidos, com id, preço e duração.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "consultar_horarios",
-            "description": "Lista horários disponíveis para um serviço em uma data.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "service_id": {"type": "integer"},
-                    "date_str": {"type": "string", "description": "YYYY-MM-DD"},
-                },
-                "required": ["service_id", "date_str"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "criar_agendamento",
-            "description": "Cria uma reserva temporária de horário. Só chamar com todos os dados já coletados.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "patient_name": {"type": "string"},
-                    "patient_phone": {"type": "string"},
-                    "service_id": {"type": "integer"},
-                    "date_str": {"type": "string", "description": "YYYY-MM-DD"},
-                    "time_str": {"type": "string", "description": "HH:MM"},
-                },
-                "required": ["patient_name", "patient_phone", "service_id", "date_str", "time_str"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "confirmar_agendamento",
-            "description": "Confirma definitivamente um agendamento pendente. Só chamar após confirmação explícita do paciente.",
-            "parameters": {
-                "type": "object",
-                "properties": {"appointment_id": {"type": "integer"}},
-                "required": ["appointment_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "cancelar_agendamento",
-            "description": "Cancela um agendamento existente.",
-            "parameters": {
-                "type": "object",
-                "properties": {"appointment_id": {"type": "integer"}},
-                "required": ["appointment_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "meus_agendamentos",
-            "description": "Lista os agendamentos futuros do paciente atual.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "status_clinica",
-            "description": "Informa se a clínica está aberta agora e até que horas.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-]
-
-
-# ============================================================
 # CARREGAMENTO DO AGENTE
 # ============================================================
-
-class Agent:
-    """Empacota o vectorstore (RAG) e o client da OpenAI, criados uma
-    única vez na inicialização do bot (load_agent), e reutilizados a
-    cada mensagem (answer_question)."""
-
-    def __init__(self, vectorstore, client):
-        self.vectorstore = vectorstore
-        self.client = client
-        self.retriever = vectorstore.as_retriever(
-            search_type="mmr",
-            search_kwargs={
-                "k": 6,
-                "fetch_k": 20,
-                "lambda_mult": 0.65,
-            },
-        )
-
 
 def load_agent(index_dir=None):
 
@@ -517,69 +403,44 @@ def load_agent(index_dir=None):
         allow_dangerous_deserialization=True,
     )
 
-    client = OpenAI(api_key=api_key)
+    # ========================================================
+    # RETRIEVER
+    # ========================================================
 
-    return Agent(vectorstore, client)
+    retriever = vectorstore.as_retriever(
+        search_type="mmr",
+        search_kwargs={
+            "k": 6,
+            "fetch_k": 20,
+            "lambda_mult": 0.65,
+        },
+    )
 
+    # ========================================================
+    # MODELO
+    # ========================================================
 
-# ============================================================
-# EXECUÇÃO DAS FERRAMENTAS
-# ============================================================
+    llm = ChatOpenAI(
+        model=LLM_MODEL,
+        api_key=api_key,
+        temperature=0.2,
+    )
 
-def _executar_tool(agent: Agent, nome: str, argumentos: dict, telegram_chat_id: str) -> str:
-    try:
-        if nome == "consultar_rag":
-            docs = agent.retriever.invoke(argumentos["pergunta"])
-            if not docs:
-                return "Nenhuma informação encontrada nos documentos da clínica."
-            return "\n\n---\n\n".join(d.page_content for d in docs)
+    prompt = ChatPromptTemplate.from_template(
+        SYSTEM_PROMPT
+    )
 
-        if nome == "consultar_preco":
-            resultado = pricing_service.get_price(argumentos["nome_servico"])
-            return json.dumps(resultado or {"erro": "serviço não encontrado"}, ensure_ascii=False)
+    document_chain = create_stuff_documents_chain(
+        llm=llm,
+        prompt=prompt,
+    )
 
-        if nome == "listar_servicos":
-            return json.dumps(pricing_service.listar_servicos(), ensure_ascii=False)
+    chain = create_retrieval_chain(
+        retriever,
+        document_chain,
+    )
 
-        if nome == "consultar_horarios":
-            slots = booking_service.get_available_slots(
-                service_id=argumentos["service_id"], date_str=argumentos["date_str"]
-            )
-            return json.dumps({"horarios_disponiveis": slots}, ensure_ascii=False)
-
-        if nome == "criar_agendamento":
-            resultado = booking_service.create_appointment(
-                patient_name=argumentos["patient_name"],
-                patient_phone=argumentos["patient_phone"],
-                service_id=argumentos["service_id"],
-                date_str=argumentos["date_str"],
-                time_str=argumentos["time_str"],
-                telegram_chat_id=telegram_chat_id,
-            )
-            return json.dumps(resultado, ensure_ascii=False)
-
-        if nome == "confirmar_agendamento":
-            resultado = booking_service.confirm_appointment(argumentos["appointment_id"])
-            return json.dumps(resultado, ensure_ascii=False)
-
-        if nome == "cancelar_agendamento":
-            resultado = booking_service.cancel_appointment(argumentos["appointment_id"])
-            return json.dumps(resultado, ensure_ascii=False)
-
-        if nome == "meus_agendamentos":
-            resultado = booking_service.get_patient_appointments(telegram_chat_id)
-            return json.dumps(resultado, ensure_ascii=False)
-
-        if nome == "status_clinica":
-            return clinic_service.descricao_status_atual()
-
-        return json.dumps({"erro": f"tool desconhecida: {nome}"}, ensure_ascii=False)
-
-    except booking_service.BookingError as e:
-        return json.dumps({"erro": str(e)}, ensure_ascii=False)
-    except Exception as e:
-        traceback.print_exc()
-        return json.dumps({"erro": f"Falha inesperada: {e}"}, ensure_ascii=False)
+    return chain
 
 
 # ============================================================
@@ -587,21 +448,9 @@ def _executar_tool(agent: Agent, nome: str, argumentos: dict, telegram_chat_id: 
 # ============================================================
 
 def answer_question(
-    agent: Agent,
+    chain,
     question: str,
-    telegram_chat_id: str = None,
-    historico: list = None,
 ):
-    """
-    agent: retorno de load_agent().
-    question: pergunta do paciente.
-    telegram_chat_id: obrigatório para agendar/consultar/cancelar
-        agendamentos (é o que identifica o paciente). Para perguntas
-        só de RAG/preço, pode ficar None.
-    historico: lista opcional de mensagens anteriores
-        [{"role": "user"/"assistant", "content": "..."}], para o bot
-        manter contexto entre mensagens da mesma conversa.
-    """
 
     if not question:
         return (
@@ -612,63 +461,38 @@ def answer_question(
     question = question.strip()
 
     current_datetime = get_current_datetime()
-    formatted_datetime = current_datetime.strftime("%d/%m/%Y %H:%M")
 
-    system_prompt_formatado = SYSTEM_PROMPT.format(
-        current_datetime=formatted_datetime
+    formatted_datetime = current_datetime.strftime(
+        "%d/%m/%Y %H:%M"
     )
 
-    mensagens = [{"role": "system", "content": system_prompt_formatado}]
-    if historico:
-        mensagens.extend(historico)
-    mensagens.append({"role": "user", "content": question})
-
     try:
-        for _ in range(MAX_TOOL_ITERACOES):
-            resposta = agent.client.chat.completions.create(
-                model=LLM_MODEL,
-                messages=mensagens,
-                tools=TOOLS,
-                temperature=0.2,
-            )
-            msg = resposta.choices[0].message
 
-            if not msg.tool_calls:
-                if not msg.content:
-                    return (
-                        "Desculpe, não consegui encontrar uma resposta "
-                        "adequada para sua pergunta."
-                    )
-                return msg.content.strip()
-
-            mensagens.append({
-                "role": "assistant",
-                "content": msg.content,
-                "tool_calls": [tc.model_dump() for tc in msg.tool_calls],
-            })
-
-            for tool_call in msg.tool_calls:
-                nome = tool_call.function.name
-                try:
-                    argumentos = json.loads(tool_call.function.arguments)
-                except json.JSONDecodeError:
-                    argumentos = {}
-
-                resultado = _executar_tool(agent, nome, argumentos, telegram_chat_id)
-
-                mensagens.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": resultado,
-                })
-
-        return (
-            "Desculpe, tive dificuldade para concluir sua solicitação agora. "
-            "Pode tentar reformular ou falar diretamente com a recepção da clínica?"
+        response = chain.invoke(
+            {
+                "input": question,
+                "current_datetime": formatted_datetime,
+            }
         )
 
+        answer = response.get(
+            "answer",
+            ""
+        )
+
+        if not answer:
+
+            return (
+                "Desculpe, não consegui encontrar uma resposta "
+                "adequada para sua pergunta."
+            )
+
+        return answer.strip()
+
     except Exception:
+
         traceback.print_exc()
+
         return (
             "Desculpe, ocorreu um erro ao processar sua pergunta. "
             "Tente novamente em alguns instantes."
