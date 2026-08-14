@@ -1,0 +1,22 @@
+# Ambiente virtual
+venv/
+ENV/
+env/
+
+# Segredos e variáveis de ambiente
+.env
+*.env
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*.class
+
+# Índice FAISS (Será gerado na nuvem via ingest.py)
+index/
+*.faiss
+*.pkl
+
+# Outros arquivos temporários / Logs
+*.log
+tatus
