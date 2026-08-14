@@ -1,303 +1,100 @@
-# 🤖 Agente de IA para a Clínica Portela
+# 🤖 Ella — Agente de IA para a Clínica Portela
 
-Assistente virtual inteligente desenvolvido para a **Clínica Portela**, capaz de compreender perguntas realizadas em linguagem natural e fornecer respostas baseadas nas informações disponíveis na base de conhecimento da clínica.
+A **Ella** é um agente de Inteligência Artificial desenvolvido para a **Clínica Portela**, capaz de responder perguntas em linguagem natural utilizando informações presentes em uma base de conhecimento composta por documentos PDF.
 
-O projeto utiliza a arquitetura **RAG (Retrieval-Augmented Generation)**, permitindo que o agente consulte documentos internos da clínica antes de gerar suas respostas.
+O projeto utiliza a arquitetura **RAG (Retrieval-Augmented Generation)**, permitindo que o agente consulte os documentos antes de gerar suas respostas.
 
-O agente foi desenvolvido para responder dúvidas relacionadas a:
-
-* Procedimentos e tratamentos estéticos;
-* Cuidados antes e depois dos procedimentos;
-* Contraindicações;
-* Políticas da clínica;
-* Horários de funcionamento;
-* Serviços oferecidos;
-* Valores;
-* Cancelamentos e reembolsos;
-* Orientações gerais relacionadas aos procedimentos.
-
-> ⚠️ **Importante:** o agente não substitui avaliação ou atendimento de um profissional de saúde. Em situações que apresentem sinais de possível complicação, o sistema orienta o usuário a procurar atendimento profissional adequado.
+A interação com o agente é realizada por meio de um **bot no Telegram**.
 
 ---
 
-## 📌 Sobre o projeto
+## 🎯 Objetivo
 
-O **Agente de IA da Clínica Portela** foi desenvolvido como uma aplicação de inteligência artificial capaz de utilizar documentos estruturados em PDF como fonte de conhecimento.
+O objetivo do projeto é desenvolver um agente de IA capaz de:
 
-Em vez de depender somente do conhecimento geral do modelo de linguagem, o sistema realiza uma busca semântica na base de documentos da clínica e utiliza os conteúdos encontrados como contexto para gerar a resposta.
-
-Essa abordagem permite que o agente responda de maneira mais direcionada às informações específicas da Clínica Portela.
+* Consultar informações presentes em documentos;
+* Responder perguntas em linguagem natural;
+* Utilizar busca semântica para encontrar informações relevantes;
+* Gerar respostas com base no conteúdo recuperado;
+* Disponibilizar o agente em uma aplicação acessível em nuvem.
 
 ---
 
-## 🧠 Arquitetura da solução
+## 🧠 Arquitetura da Solução
 
-A aplicação utiliza uma arquitetura baseada em **RAG (Retrieval-Augmented Generation)**.
-
-### Fluxo principal
+O projeto utiliza uma arquitetura RAG composta pelas seguintes etapas:
 
 ```text
-┌──────────────┐
-│    Usuário   │
-└──────┬───────┘
-       │
-       ▼
-┌──────────────────┐
-│  Bot Telegram    │
-│ python-telegram  │
-│      -bot        │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│    Motor RAG     │
-│    LangChain     │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│      FAISS       │
-│   Busca vetorial │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│ Documentos PDF   │
-│ Base de          │
-│ conhecimento     │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│      OpenAI      │
-│ Embeddings + LLM │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│ Resposta gerada  │
-│ pelo agente      │
-└──────────────────┘
-```
-
-### Funcionamento do RAG
-
-O funcionamento pode ser dividido em duas etapas principais.
-
-### 1. Ingestão dos documentos
-
-Os documentos PDF da clínica são carregados e processados pelo sistema utilizando **pypdf**.
-
-O conteúdo é dividido em pequenos trechos (*chunks*) e transformado em vetores utilizando embeddings da OpenAI.
-
-Esses vetores são armazenados em um índice **FAISS**, permitindo realizar buscas semânticas posteriormente.
-
-```text
-PDFs
- ↓
-pypdf
- ↓
-Extração do texto
- ↓
-Divisão em chunks
- ↓
-OpenAI Embeddings
- ↓
-FAISS
- ↓
-Índice vetorial
-```
-
-### 2. Consulta do usuário
-
-Quando o usuário envia uma pergunta pelo Telegram, o sistema realiza uma busca na base vetorial para encontrar os trechos mais relevantes.
-
-Os documentos recuperados são utilizados como contexto para o modelo de linguagem da OpenAI, que gera uma resposta baseada nas informações encontradas.
-
-```text
-Pergunta do usuário
- ↓
+Usuário
+   │
+   ▼
+Telegram
+   │
+   ▼
+Agente Ella
+   │
+   ▼
 Busca semântica
- ↓
+   │
+   ▼
 FAISS
- ↓
-Documentos relevantes
- ↓
+   │
+   ▼
+Documentos PDF
+   │
+   ▼
 Contexto recuperado
- ↓
-OpenAI / gpt-4.1-mini
- ↓
-Resposta
+   │
+   ▼
+OpenAI
+   │
+   ▼
+Resposta ao usuário
 ```
+
+### Funcionamento
+
+1. Os documentos PDF são carregados pelo sistema.
+2. O conteúdo é dividido em trechos menores.
+3. Os trechos são transformados em embeddings.
+4. Os embeddings são armazenados em um índice vetorial FAISS.
+5. O usuário envia uma pergunta pelo Telegram.
+6. O sistema realiza uma busca semântica pelos trechos mais relevantes.
+7. Os conteúdos encontrados são utilizados como contexto para o modelo da OpenAI.
+8. A resposta é enviada de volta ao usuário.
 
 ---
 
-# 🛠️ Tecnologias utilizadas
-
-## Linguagem
+## 🛠️ Tecnologias Utilizadas
 
 * **Python**
-
-## Inteligência Artificial
-
-* **OpenAI 1.109.1** — integração com os modelos de inteligência artificial utilizados pelo agente.
-* **LangChain 0.3.27** — construção do pipeline RAG e gerenciamento do fluxo de recuperação e geração.
-* **LangChain OpenAI 0.3.29** — integração entre LangChain e os modelos da OpenAI.
-* **tiktoken 0.11.0** — tokenização utilizada no processamento dos textos.
+* **LangChain**
+* **OpenAI**
+* **FAISS**
+* **pypdf**
+* **python-telegram-bot**
+* **Git**
+* **GitHub**
+* **Render**
 
 ### Modelos utilizados
 
-**Embeddings:**
+* **LLM:** OpenAI
+* **Embeddings:** OpenAI `text-embedding-3-small`
+
+---
+
+## 📂 Estrutura do Projeto
 
 ```text
-text-embedding-3-small
-```
-
-Utilizado para transformar os trechos dos documentos em representações vetoriais que podem ser pesquisadas semanticamente.
-
-**Modelo de linguagem:**
-
-```text
-gpt-4.1-mini
-```
-
-Utilizado para interpretar as perguntas, receber o contexto recuperado pela busca e gerar as respostas do agente.
-
-> O projeto utilizava inicialmente o Google Gemini, porém a implementação atual utiliza a **OpenAI** para geração de respostas e embeddings.
-
----
-
-## 🔎 RAG e busca vetorial
-
-* **LangChain 0.3.27** — estrutura principal do pipeline RAG.
-* **LangChain Community 0.3.27** — componentes adicionais utilizados no projeto.
-* **FAISS 1.12.0** — armazenamento e busca dos vetores gerados pelos embeddings.
-
-O FAISS permite encontrar os trechos dos documentos que possuem maior similaridade semântica com a pergunta realizada pelo usuário.
-
----
-
-## 📄 Processamento de documentos
-
-* **pypdf 6.0.0** — leitura e extração do conteúdo dos arquivos PDF utilizados como fonte de conhecimento.
-
----
-
-## 🤖 Interface e integração
-
-* **python-telegram-bot 22.2** — desenvolvimento e integração do chatbot com o Telegram.
-* **python-dotenv 1.1.1** — gerenciamento das variáveis de ambiente.
-
----
-
-## ☁️ Infraestrutura
-
-* **Oracle Cloud Infrastructure (OCI)** — ambiente utilizado para implantação e execução do agente.
-
----
-
-## 🔧 Controle de versão
-
-* **Git**
-* **GitHub**
-
----
-
-# 📦 Dependências do projeto
-
-As versões das principais bibliotecas utilizadas no projeto estão definidas no arquivo `requirements.txt`:
-
-```text
-python-telegram-bot==22.2
-python-dotenv==1.1.1
-
-langchain==0.3.27
-langchain-community==0.3.27
-langchain-openai==0.3.29
-
-faiss-cpu==1.12.0
-pypdf==6.0.0
-openai==1.109.1
-tiktoken==0.11.0
-```
-
-Para instalar todas as dependências:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-# 🔄 Pipeline tecnológico
-
-O fluxo completo do projeto pode ser representado da seguinte forma:
-
-```text
-                    DOCUMENTOS PDF
-                          │
-                          ▼
-                    ┌───────────┐
-                    │   pypdf   │
-                    └─────┬─────┘
-                          │
-                          ▼
-                ┌──────────────────┐
-                │     LangChain    │
-                │  Processamento   │
-                │     dos textos   │
-                └────────┬─────────┘
-                         │
-                         ▼
-                ┌──────────────────┐
-                │      OpenAI      │
-                │ text-embedding   │
-                │    3-small       │
-                └────────┬─────────┘
-                         │
-                         ▼
-                    ┌───────────┐
-                    │   FAISS   │
-                    │  Vetores  │
-                    └─────┬─────┘
-                          │
-                          │ Recuperação
-                          ▼
-                  ┌───────────────┐
-                  │   LangChain   │
-                  │     RAG       │
-                  └───────┬───────┘
-                          │
-                          ▼
-                    ┌───────────┐
-                    │  OpenAI   │
-                    │ gpt-4.1-  │
-                    │   mini    │
-                    └─────┬─────┘
-                          │
-                          ▼
-                  ┌───────────────┐
-                  │ Telegram Bot  │
-                  └───────┬───────┘
-                          │
-                          ▼
-                       USUÁRIO
-```
-
----
-
-# 📂 Estrutura do projeto
-
-A estrutura principal do projeto é organizada da seguinte maneira:
-
-```text
-clinica-portela-agente/
+clinica-portela-agenteONE/
 │
-├── data/
-│   └── documentos da clínica em PDF
+├── documentos/
+│   └── *.pdf
 │
 ├── index/
-│   └── índice vetorial FAISS
+│   ├── index.faiss
+│   └── index.pkl
 │
 ├── src/
 │   ├── ingest.py
@@ -313,161 +110,34 @@ clinica-portela-agente/
 ### Principais arquivos
 
 **`src/ingest.py`**
-
-Responsável por:
-
-* Ler os documentos PDF;
-* Extrair o conteúdo dos documentos;
-* Dividir o conteúdo em partes;
-* Gerar os embeddings;
-* Criar o índice vetorial FAISS;
-* Salvar o índice para utilização pelo agente.
+Responsável por ler os documentos PDF, processar os textos, gerar embeddings e criar o índice FAISS.
 
 **`src/rag_engine.py`**
-
-Responsável pelo motor RAG e pela integração entre:
-
-* FAISS;
-* documentos;
-* recuperação de contexto;
-* embeddings;
-* modelo da OpenAI;
-* geração das respostas.
+Responsável pelo mecanismo de recuperação das informações e geração das respostas.
 
 **`src/telegram_bot.py`**
+Responsável pela comunicação entre o usuário e o agente por meio do Telegram.
 
-Responsável pela comunicação com o usuário através do Telegram.
-
-O arquivo recebe as mensagens, envia as perguntas para o motor RAG e retorna as respostas geradas pelo agente.
+**`documentos/`**
+Contém os documentos utilizados como fonte de conhecimento do agente.
 
 ---
 
-# 📚 Base de conhecimento
+## 📚 Base de Conhecimento
 
-A base de conhecimento utilizada pelo agente é composta por documentos em PDF desenvolvidos especificamente para a Clínica Portela.
+A base de conhecimento contém documentos relacionados à Clínica Portela, incluindo informações como:
 
-Entre os conteúdos utilizados estão:
-
-* FAQ da clínica;
-* Base de conhecimento;
-* Serviços e procedimentos;
-* Valores;
-* Horários de funcionamento;
-* Política de privacidade;
-* Política de reembolso e devoluções;
-* Termos e condições;
+* Procedimentos e tratamentos;
+* Cuidados pré e pós-procedimentos;
 * Contraindicações;
-* Orientações relacionadas aos procedimentos;
-* Informações gerais da clínica.
+* Perguntas frequentes;
+* Horários de funcionamento;
+* Informações de atendimento;
+* Políticas da clínica.
 
-Os documentos funcionam como fonte de informação para o sistema RAG.
-
----
-
-# ⚙️ Instalação e execução
-
-## 1. Clonar o repositório
-
-```bash
-git clone https://github.com/seu-usuario/clinica-portela-agente.git
-cd clinica-portela-agente
-```
-
-Substitua `seu-usuario` pelo usuário real do GitHub responsável pelo repositório.
+Os documentos são utilizados como fonte de informação para o agente durante a recuperação das respostas.
 
 ---
-
-## 2. Criar o ambiente virtual
-
-### Windows
-
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-### Linux/macOS
-
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
----
-
-## 3. Instalar as dependências
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## 4. Configurar as variáveis de ambiente
-
-Crie um arquivo `.env` baseado no arquivo `.env.example`.
-
-No Linux/macOS:
-
-```bash
-cp .env.example .env
-```
-
-No Windows, o arquivo também pode ser criado manualmente.
-
-As principais variáveis utilizadas são:
-
-```env
-OPENAI_API_KEY=sua_chave_openai
-TELEGRAM_BOT_TOKEN=seu_token_do_telegram
-```
-
-> 🔐 **Nunca compartilhe suas chaves de API ou faça commit do arquivo `.env` no GitHub.**
-
----
-
-# 🧠 Gerando o índice vetorial
-
-Antes de iniciar o agente, é necessário processar os documentos e gerar o índice FAISS.
-
-Execute:
-
-```bash
-python src/ingest.py
-```
-
-O processo realiza:
-
-```text
-PDF
- ↓
-Extração do texto com pypdf
- ↓
-Divisão em chunks
- ↓
-Geração dos embeddings
- ↓
-FAISS
- ↓
-Índice vetorial
-```
-
-Sempre que os documentos da base de conhecimento forem alterados, recomenda-se executar novamente o processo de ingestão para atualizar o índice.
-
----
-
-# 🤖 Executando o bot
-
-Depois de gerar o índice, execute:
-
-```bash
-python src/telegram_bot.py
-```
-
-O bot será iniciado e ficará disponível no Telegram para receber perguntas.
-
----
-
 # 💬 Testes realizados
 
 Durante os testes locais realizados em **11/08/2026**, o agente **Ella** foi submetido a diferentes situações e perguntas relacionadas aos procedimentos da Clínica Portela.
@@ -708,156 +378,125 @@ Os testes realizados abrangeram diferentes categorias de interação:
 
 Os testes demonstraram que o agente consegue lidar tanto com **perguntas informativas e administrativas** quanto com **situações em que deve adotar uma postura mais cautelosa**, evitando indicar medicamentos ou tratamentos por conta própria e orientando o usuário a buscar avaliação profissional quando necessário.
 
+------
 
-# 🎯 Capacidades do agente
+## ⚙️ Como Executar o Projeto
 
-Durante os testes, o agente demonstrou capacidade de:
+### 1. Clonar o repositório
 
-* Interpretar perguntas escritas em linguagem natural;
-* Consultar informações presentes nos documentos da clínica;
-* Responder dúvidas relacionadas aos procedimentos;
-* Identificar perguntas sobre contraindicações;
-* Utilizar informações da política da clínica;
-* Responder questões relacionadas aos horários;
-* Responder perguntas sobre valores e serviços;
-* Diferenciar dúvidas informativas de situações que exigem avaliação profissional;
-* Evitar indicar medicamentos por conta própria;
-* Recomendar atendimento profissional diante de sinais potencialmente graves;
-* Manter uma comunicação adequada ao contexto de atendimento ao cliente.
-
----
-
-# 🔐 Segurança e variáveis de ambiente
-
-As credenciais utilizadas pela aplicação são armazenadas através de variáveis de ambiente.
-
-O arquivo `.env` **não deve ser enviado para o GitHub**.
-
-O projeto utiliza um arquivo:
-
-```text
-.env.example
+```bash
+git clone https://github.com/tulioportela0501/clinica-portela-agenteONE.git
+cd clinica-portela-agenteONE
 ```
 
-como modelo para configuração.
+### 2. Criar o ambiente virtual
 
-Exemplo:
+Windows:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+Linux/macOS:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Instalar as dependências
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configurar as variáveis de ambiente
+
+Criar um arquivo `.env` na raiz do projeto:
 
 ```env
-OPENAI_API_KEY=
-TELEGRAM_BOT_TOKEN=
+OPENAI_API_KEY=sua_chave_openai
+TELEGRAM_BOT_TOKEN=seu_token_telegram
 ```
 
-As credenciais reais devem permanecer somente no ambiente local ou no servidor utilizado para o deploy.
+### 5. Gerar o índice da base de conhecimento
 
----
-
-# ☁️ Deploy na Oracle Cloud Infrastructure
-
-A aplicação foi preparada para execução em ambiente de nuvem utilizando a **Oracle Cloud Infrastructure (OCI)**.
-
-O deploy permite manter o agente executando em uma infraestrutura externa, possibilitando que o bot do Telegram permaneça disponível sem depender da execução manual no computador local.
-
-### Evidência do deploy
-
-A entrega do projeto deve apresentar uma evidência da aplicação funcionando na OCI.
-
-Exemplo de evidência:
-
-```text
-Oracle Cloud Infrastructure
-        ↓
-Servidor da aplicação
-        ↓
-Agente RAG
-        ↓
-Telegram Bot
-        ↓
-Resposta ao usuário
+```bash
+python src/ingest.py
 ```
 
-📸 **Adicionar aqui uma captura de tela do ambiente OCI ou do bot funcionando em produção.**
+### 6. Executar o agente
 
-> Caso exista uma URL pública para a aplicação, ela também pode ser adicionada nesta seção.
-
----
-
-# 📦 Entregáveis do Challenge Alura Agente
-
-Este projeto contempla os principais requisitos solicitados no desafio.
-
-### Repositório GitHub
-
-* Código-fonte disponível no GitHub;
-* Estrutura organizada;
-* Histórico de commits;
-* Arquivos necessários para execução do projeto.
-
-### Documentação
-
-O README apresenta:
-
-* Descrição do projeto;
-* Arquitetura da solução;
-* Tecnologias utilizadas;
-* Estrutura do projeto;
-* Instruções de instalação;
-* Instruções de execução;
-* Funcionamento do RAG;
-* Exemplos reais de perguntas;
-* Exemplos reais de respostas;
-* Testes realizados.
-
-### Agente inteligente funcional
-
-O projeto possui:
-
-* Processamento de documentos PDF;
-* Geração de embeddings;
-* Banco vetorial FAISS;
-* Recuperação de informações;
-* Modelo de linguagem da OpenAI;
-* Interface através do Telegram.
-
-### Evidência de deploy
-
-A aplicação foi preparada para execução na:
-
-**Oracle Cloud Infrastructure (OCI).**
-
-A entrega deve incluir uma captura de tela ou outro comprovante demonstrando a aplicação em funcionamento no ambiente de nuvem.
+```bash
+python src/telegram_bot.py
+```
 
 ---
 
-# 🚀 Melhorias futuras
+## ☁️ Deploy
 
-Entre as possíveis evoluções do projeto estão:
+O projeto foi implantado em ambiente de nuvem utilizando o **Render**.
 
-* Sistema de agendamento de consultas e procedimentos;
-* Consulta de horários disponíveis;
-* Confirmação e cancelamento de agendamentos;
-* Integração com banco de dados;
-* Cadastro de pacientes;
-* Histórico de atendimentos;
-* Integração com calendário;
-* Sistema de notificações;
-* Integração com WhatsApp;
-* Painel administrativo;
-* Monitoramento das conversas;
-* Melhor gerenciamento de contexto nas conversas.
+A aplicação é executada remotamente, permitindo que o agente permaneça disponível sem a necessidade de execução local.
+
+**Build Command:**
+
+```bash
+pip install -r requirements.txt && python src/ingest.py
+```
+
+**Start Command:**
+
+```bash
+python src/telegram_bot.py
+```
 
 ---
 
-# 👨‍💻 Autor
+## 📸 Evidência do Deploy
+
+> <img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/ce96f4ec-7469-41a4-b84c-1a1305692a86" />
+
+
+
+<img width="1600" height="850" alt="image" src="https://github.com/user-attachments/assets/8be8c6e8-f703-4753-9660-7d4a0a99cddc" />
+
+
+
+---
+
+## 📸 Evidência do Agente Funcionando
+
+<img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/7cb6c2e9-59cc-44e7-b410-97bb5456c994" />
+
+
+---
+
+## ✅ Requisitos do Challenge Alura Agente
+
+| Requisito                          | Status           |
+| ---------------------------------- | ---------------- |
+| Repositório público no GitHub      | ✅                |
+| Histórico de commits               | ✅                |
+| Estrutura organizada               | ✅                |
+| Descrição geral do projeto         | ✅                |
+| Arquitetura da solução             | ✅                |
+| Tecnologias utilizadas             | ✅                |
+| Instruções para executar o projeto | ✅                |
+| Agente de IA funcional             | ✅                |
+| Documento utilizado como fonte     | ✅                |
+| Código para processar o documento  | ✅                |
+| Exemplos de perguntas              | ✅                |
+| Exemplos de respostas              | ✅                |
+| Deploy em ambiente de nuvem        | ✅                |
+| Evidência do deploy                | 📸 Inserir print |
+| Evidência do agente funcionando    | 📸 Inserir print |
+
+---
+
+## 👨‍💻 Autor
 
 **Marco Túlio Chaves Portela**
 
-Projeto desenvolvido para o **Challenge Alura Agente**, com foco na aplicação prática de Inteligência Artificial, RAG, processamento de documentos e integração com chatbot.
-
----
-
-## 📄 Licença
-
-Este projeto foi desenvolvido para fins acadêmicos e demonstrativos.
-
-As informações utilizadas na base de conhecimento da Clínica Portela são referentes a uma clínica fictícia criada para o projeto.
+Projeto desenvolvido para o **Challenge Alura Agente**, utilizando Inteligência Artificial, RAG, processamento de documentos e integração com Telegram.
