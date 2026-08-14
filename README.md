@@ -473,27 +473,6 @@ python src/telegram_bot.py
 
 ---
 
-## ✅ Requisitos do Challenge Alura Agente
-
-| Requisito                          | Status           |
-| ---------------------------------- | ---------------- |
-| Repositório público no GitHub      | ✅                |
-| Histórico de commits               | ✅                |
-| Estrutura organizada               | ✅                |
-| Descrição geral do projeto         | ✅                |
-| Arquitetura da solução             | ✅                |
-| Tecnologias utilizadas             | ✅                |
-| Instruções para executar o projeto | ✅                |
-| Agente de IA funcional             | ✅                |
-| Documento utilizado como fonte     | ✅                |
-| Código para processar o documento  | ✅                |
-| Exemplos de perguntas              | ✅                |
-| Exemplos de respostas              | ✅                |
-| Deploy em ambiente de nuvem        | ✅                |
-| Evidência do deploy                | 📸 Inserir print |
-| Evidência do agente funcionando    | 📸 Inserir print |
-
----
 
 ## 👨‍💻 Autor
 
